@@ -64,18 +64,17 @@ def _hour_checker():
         now = time.localtime()
         if now.tm_min == 0 and now.tm_sec == 0:
             print(f"--- top of hour: {time.strftime('%H:00', now)} ---")
-            rollup_hourly_averages()
-            time.sleep(1)
-        else:
-            time.sleep(0.5)
-
-
-def _day_checker():
-    while True:
-        now = time.localtime()
-        if now.tm_hour == 0 and now.tm_min == 0 and now.tm_sec == 0:
-            print(f"--- midnight rollup: {time.strftime('%Y-%m-%d', now)} ---")
-            rollup_daily_averages()
+            try:
+                rollup_hourly_averages()
+            except Exception as e:
+                print(f"Hourly rollup failed: {e}")
+            else:
+                if now.tm_hour == 0:
+                    print(f"--- midnight rollup: {time.strftime('%Y-%m-%d', now)} ---")
+                    try:
+                        rollup_daily_averages()
+                    except Exception as e:
+                        print(f"Daily rollup failed: {e}")
             time.sleep(1)
         else:
             time.sleep(0.5)
@@ -85,7 +84,6 @@ _THREADS = [
     ("poll",    _poll_loop),
     ("minute",  _minute_checker),
     ("hour",    _hour_checker),
-    ("day",     _day_checker),
     ("api",     run_api),
 ]
 
