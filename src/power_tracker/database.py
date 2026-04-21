@@ -100,6 +100,10 @@ def rollup_hourly_averages():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
+                DELETE FROM wattage_hourly
+                WHERE hour = date_trunc('hour', NOW()) - INTERVAL '1 hour';
+            """)
+            cur.execute("""
                 INSERT INTO wattage_hourly (source, avg_watts, hour)
                 SELECT source, AVG(avg_watts), date_trunc('hour', NOW()) - INTERVAL '1 hour'
                 FROM wattage_averages
