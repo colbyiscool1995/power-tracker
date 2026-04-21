@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: power_tracker
+      POSTGRES_USER: pt_admin
+      POSTGRES_PASSWORD: admin123
+    volumes:
+      - postgres_data_powertracker:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    
+
+volumes:
+  postgres_data_powertracker:
