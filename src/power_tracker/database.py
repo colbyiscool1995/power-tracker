@@ -107,11 +107,7 @@ def rollup_hourly_averages():
                   AND minute <  date_trunc('hour', NOW())
                 GROUP BY source;
             """)
-            cur.execute("""
-                DELETE FROM wattage_averages
-                WHERE minute >= date_trunc('hour', NOW()) - INTERVAL '1 hour'
-                  AND minute <  date_trunc('hour', NOW());
-            """)
+            
         conn.commit()
 
 
@@ -127,11 +123,7 @@ def rollup_daily_averages():
                   AND hour <  date_trunc('day', NOW())
                 GROUP BY source;
             """)
-            cur.execute("""
-                DELETE FROM wattage_hourly
-                WHERE hour >= date_trunc('day', NOW()) - INTERVAL '1 day'
-                  AND hour <  date_trunc('day', NOW());
-            """)
+            
         conn.commit()
 
 
