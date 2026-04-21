@@ -49,6 +49,17 @@ def init_db():
                 );
             """)
             cur.execute("""
+                DELETE FROM wattage_hourly a
+                USING wattage_hourly b
+                WHERE a.id < b.id
+                  AND a.source = b.source
+                  AND a.hour = b.hour;
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_wattage_hourly_source_hour
+                ON wattage_hourly (source, hour);
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS wattage_daily (
                     id SERIAL PRIMARY KEY,
                     source TEXT NOT NULL,
@@ -96,7 +107,7 @@ def rollup_minute_averages():
 
 
 def rollup_hourly_averages():
-    """Compute per-source hourly averages from wattage_averages, store in wattage_hourly, delete rolled-up rows."""
+    """Compute per-source hourly averages from wattage_averages and upsert into wattage_hourly."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -106,12 +117,10 @@ def rollup_hourly_averages():
                 WHERE minute >= date_trunc('hour', NOW()) - INTERVAL '1 hour'
                   AND minute <  date_trunc('hour', NOW())
                 GROUP BY source;
+                ON CONFLICT (source, hour)
+                DO UPDATE SET avg_watts = EXCLUDED.avg_watts;
             """)
-            cur.execute("""
-                DELETE FROM wattage_averages
-                WHERE minute >= date_trunc('hour', NOW()) - INTERVAL '1 hour'
-                  AND minute <  date_trunc('hour', NOW());
-            """)
+            
         conn.commit()
 
 
@@ -127,11 +136,7 @@ def rollup_daily_averages():
                   AND hour <  date_trunc('day', NOW())
                 GROUP BY source;
             """)
-            cur.execute("""
-                DELETE FROM wattage_hourly
-                WHERE hour >= date_trunc('day', NOW()) - INTERVAL '1 day'
-                  AND hour <  date_trunc('day', NOW());
-            """)
+            
         conn.commit()
 
 
