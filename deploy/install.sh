@@ -7,6 +7,12 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CURRENT_USER="$(whoami)"
 PYTHON="$(which python3)"
 
+if [[ ! "$REPO_DIR" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  echo "Error: unsupported repository path for systemd unit fields: $REPO_DIR" >&2
+  echo "Move the repository to a path using only letters, numbers, '.', '_', '-', and '/'." >&2
+  exit 1
+fi
+
 echo "Installing dependencies..."
 "${PYTHON}" -m pip install -e "$REPO_DIR" -q
 
