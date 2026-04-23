@@ -116,7 +116,7 @@ def rollup_hourly_averages():
                 FROM wattage_averages
                 WHERE minute >= date_trunc('hour', NOW()) - INTERVAL '1 hour'
                   AND minute <  date_trunc('hour', NOW())
-                GROUP BY source;
+                GROUP BY source
                 ON CONFLICT (source, hour)
                 DO UPDATE SET avg_watts = EXCLUDED.avg_watts;
             """)
