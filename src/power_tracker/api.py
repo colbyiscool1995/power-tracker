@@ -166,10 +166,10 @@ def get_kwh_per_day():
                 LIMIT 100;
             """)
             rows = cur.fetchall()
-    return [
+    return jsonify([
         {"day": r[0].isoformat(), "kwh": r[1]}
         for r in rows
-    ]
+    ])
 
 @app.route("/totals/lifetime_kwh")
 def get_lifetime_kwh():

@@ -8,7 +8,7 @@ CURRENT_USER="$(whoami)"
 PYTHON="$(which python3)"
 
 echo "Installing dependencies..."
-pip install -e "$REPO_DIR" -q
+"${PYTHON}" -m pip install -e "$REPO_DIR" -q
 
 echo "Writing systemd service..."
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
