@@ -142,7 +142,14 @@ def get_daily_totals():
 def get_current_watts():
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT SUM(watts) FROM (SELECT watts from wattage_readings order by timestamp desc limit 3) AS subquery;")
+            cur.execute("""
+                SELECT SUM(watts)
+                FROM (
+                    SELECT DISTINCT ON (source) source, watts
+                    FROM wattage_readings
+                    ORDER BY source, timestamp DESC
+                ) AS latest_readings;
+            """)
             total = cur.fetchone()[0]
     return jsonify({"current_watts": total or 0.0})
 
