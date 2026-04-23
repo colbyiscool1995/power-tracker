@@ -120,3 +120,12 @@ def test_get_current_watts(mock_gc, client):
     res = client.get("/totals/current_watts")
     assert res.status_code == 200
     assert res.get_json()["current_watts"] == 75.0
+
+@patch("power_tracker.api.get_connection")
+def test_get_kwh_per_day(mock_gc, client):
+    mock_gc.return_value = _mock_conn(rows=[(_DATE, 1.5)])
+    res = client.get("/totals/kwh_per_day")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data[0]["day"] == "2026-04-22"
+    assert data[0]["kwh"] == 1.5
