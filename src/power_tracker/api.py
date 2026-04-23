@@ -145,7 +145,7 @@ def get_current_watts():
             cur.execute("""
                 SELECT SUM(watts)
                 FROM (
-                    SELECT DISTINCT ON (source) source, watts
+                    SELECT DISTINCT ON (source) watts
                     FROM wattage_readings
                     ORDER BY source, timestamp DESC
                 ) AS latest_readings;
