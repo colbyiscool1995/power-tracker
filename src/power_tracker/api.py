@@ -184,7 +184,11 @@ def get_lifetime_kwh():
 
 @app.route("/totals/monthly_wh")
 def get_monthly_wh():
-    billing_day = int(os.environ.get("BILLING_DAY", 1))
+    # try parsing billing day from env, default to 1 if not set or invalid
+    try:
+        billing_day = int(os.environ.get("BILLING_DAY", 1))
+    except ValueError:
+        billing_day = 1
     today = date.today()
     if today.day >= billing_day:
         period_start = today.replace(day=billing_day)
