@@ -33,9 +33,12 @@ def _on_message(channel, method, properties, body):
         insert_wattage_reading(source, watts, system_name, local_ip)
         print(f"Inserted: [{system_name}] {source} = {watts:.3f} W")
         channel.basic_ack(delivery_tag=method.delivery_tag)
-    except Exception as e:
-        print(f"Failed to process message: {e} — nacking")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        print(f"Failed to process message due to invalid payload: {e} — nacking without requeue")
         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+    except Exception as e:
+        print(f"Failed to process message due to transient error: {e} — nacking for retry")
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
 
 def run_consumer():
