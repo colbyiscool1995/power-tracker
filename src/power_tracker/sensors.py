@@ -35,7 +35,7 @@ class WattageSensor(ABC):
             # platform.mac_ver() is removed in some Python versions
             return "N/A"
     
-    def get_config(self) -> dict[str, str]:
+    def get_config(self) -> None:
         platform_os = platform.platform().lower() # Treat 'macOS' as 'macos' for compatibility  
         platform_mac = self.macos_version() # Get macOS version for Apple Silicon detection
         cpu_info = cpuinfo.get_cpu_info()

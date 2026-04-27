@@ -74,10 +74,11 @@ def _flush_residual_readings():
             if count > 0:
                 print(f"Found {count} residual readings from previous run — rolling up.")
                 cur.execute("""
-                    INSERT INTO wattage_averages (source, avg_watts, minute)
-                    SELECT source, AVG(watts), date_trunc('minute', MIN(timestamp))
+                    INSERT INTO wattage_averages (source, avg_watts, system_name, local_ip, minute)
+                    SELECT source, AVG(watts), system_name, local_ip,
+                           date_trunc('minute', MIN(timestamp))
                     FROM wattage_readings
-                    GROUP BY source;
+                    GROUP BY source, system_name, local_ip;
                 """)
                 cur.execute("DELETE FROM wattage_readings;")
         conn.commit()
