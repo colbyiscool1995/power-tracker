@@ -17,9 +17,13 @@ class WattageSensor(ABC):
 
     def linux_version(self) -> str:
         try:
-            return platform.linux_distribution()[0].lower()
-        except AttributeError:
-            # platform.linux_distribution() is removed in Python 3.8+
+            os_release = platform.freedesktop_os_release()
+            distro = os_release.get("ID") or os_release.get("NAME")
+            if not distro:
+                return "N/A"
+            return distro.lower()
+        except (AttributeError, OSError):
+            # freedesktop os-release information is unavailable
             return "N/A"
         
     def macos_version(self) -> str:
