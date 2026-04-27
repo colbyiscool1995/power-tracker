@@ -1,9 +1,13 @@
 import os
+from pathlib import Path
+
 import psycopg2
 from psycopg2.extensions import connection as Connection
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "migrations"
 
 
 def get_connection() -> Connection:
@@ -20,55 +24,41 @@ def get_connection() -> Connection:
         password=os.environ["DB_PASSWORD"],
     )
 
+
 def init_db():
-    """Initialize the database by creating the necessary tables."""
+    _run_migrations()
+    _flush_residual_readings()
+
+
+def _run_migrations():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS wattage_readings (
-                    id SERIAL PRIMARY KEY,
-                    source TEXT NOT NULL,
-                    watts REAL NOT NULL,
-                    timestamp TIMESTAMPTZ DEFAULT NOW()
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS wattage_averages (
-                    id SERIAL PRIMARY KEY,
-                    source TEXT NOT NULL,
-                    avg_watts REAL NOT NULL,
-                    minute TIMESTAMPTZ NOT NULL
-                );
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS wattage_hourly (
-                    id SERIAL PRIMARY KEY,
-                    source TEXT NOT NULL,
-                    avg_watts REAL NOT NULL,
-                    hour TIMESTAMPTZ NOT NULL
-                );
-            """)
-            cur.execute("""
-                DELETE FROM wattage_hourly a
-                USING wattage_hourly b
-                WHERE a.id < b.id
-                  AND a.source = b.source
-                  AND a.hour = b.hour;
-            """)
-            cur.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_wattage_hourly_source_hour
-                ON wattage_hourly (source, hour);
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS wattage_daily (
-                    id SERIAL PRIMARY KEY,
-                    source TEXT NOT NULL,
-                    avg_watts REAL NOT NULL,
-                    day DATE NOT NULL
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    filename TEXT PRIMARY KEY,
+                    applied_at TIMESTAMPTZ DEFAULT NOW()
                 );
             """)
         conn.commit()
-    _flush_residual_readings()
+
+        migration_files = sorted(_MIGRATIONS_DIR.glob("*.sql"))
+        for path in migration_files:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM schema_migrations WHERE filename = %s;",
+                    (path.name,),
+                )
+                if cur.fetchone():
+                    continue
+
+            print(f"Applying migration: {path.name}")
+            with conn.cursor() as cur:
+                cur.execute(path.read_text())
+                cur.execute(
+                    "INSERT INTO schema_migrations (filename) VALUES (%s);",
+                    (path.name,),
+                )
+            conn.commit()
 
 
 def _flush_residual_readings():
@@ -93,10 +83,10 @@ def rollup_minute_averages():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO wattage_averages (source, avg_watts, minute)
-                SELECT source, AVG(watts), date_trunc('minute', NOW())
+                INSERT INTO wattage_averages (source, avg_watts, system_name, local_ip, minute)
+                SELECT source, AVG(watts), system_name, local_ip, date_trunc('minute', NOW())
                 FROM wattage_readings
-                GROUP BY source;
+                GROUP BY source, system_name, local_ip;
             """)
             cur.execute("""
                 DELETE FROM wattage_readings
@@ -111,16 +101,15 @@ def rollup_hourly_averages():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO wattage_hourly (source, avg_watts, hour)
-                SELECT source, AVG(avg_watts), date_trunc('hour', NOW()) - INTERVAL '1 hour'
+                INSERT INTO wattage_hourly (source, avg_watts, system_name, local_ip, hour)
+                SELECT source, AVG(avg_watts), system_name, local_ip, date_trunc('hour', NOW()) - INTERVAL '1 hour'
                 FROM wattage_averages
                 WHERE minute >= date_trunc('hour', NOW()) - INTERVAL '1 hour'
                   AND minute <  date_trunc('hour', NOW())
-                GROUP BY source
+                GROUP BY source, system_name, local_ip
                 ON CONFLICT (source, hour)
                 DO UPDATE SET avg_watts = EXCLUDED.avg_watts;
             """)
-            
         conn.commit()
 
 
@@ -129,23 +118,22 @@ def rollup_daily_averages():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO wattage_daily (source, avg_watts, day)
-                SELECT source, AVG(avg_watts), (date_trunc('day', NOW()) - INTERVAL '1 day')::DATE
+                INSERT INTO wattage_daily (source, avg_watts, system_name, local_ip, day)
+                SELECT source, AVG(avg_watts), system_name, local_ip, (date_trunc('day', NOW()) - INTERVAL '1 day')::DATE
                 FROM wattage_hourly
                 WHERE hour >= date_trunc('day', NOW()) - INTERVAL '1 day'
                   AND hour <  date_trunc('day', NOW())
-                GROUP BY source;
+                GROUP BY source, system_name, local_ip;
             """)
-            
         conn.commit()
 
 
-def insert_wattage_reading(source: str, watts: float):
+def insert_wattage_reading(source: str, watts: float, system_name: str = "", local_ip: str = ""):
     """Insert a wattage reading into the database."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO wattage_readings (source, watts)
-                VALUES (%s, %s);
-            """, (source, watts))
+                INSERT INTO wattage_readings (source, watts, system_name, local_ip)
+                VALUES (%s, %s, %s, %s);
+            """, (source, watts, system_name, local_ip))
         conn.commit()

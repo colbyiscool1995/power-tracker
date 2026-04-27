@@ -8,10 +8,13 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "python-dotenv>=1.0",
     "flask>=3.0",
+    "pika>=1.3",
 ]
 
 [project.scripts]
 power-tracker = "power_tracker.main:main"
+power-tracker-client = "power_tracker.client:run_client"
+power-tracker-consumer = "power_tracker.consumer:run_consumer"
 
 [project.optional-dependencies]
 dev = ["pytest>=9.0"]
