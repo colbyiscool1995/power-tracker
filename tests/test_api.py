@@ -78,7 +78,8 @@ def test_get_lifetime_kwh(mock_gc, client):
 
 @patch("power_tracker.api.get_connection")
 def test_get_monthly_wh_current_month(mock_gc, client):
-    mock_gc.return_value = _mock_conn(scalar=2400.0)
+    conn = _mock_conn(scalar=2400.0)
+    mock_gc.return_value = conn
     with patch.dict(os.environ, {"BILLING_DAY": "1"}):
         with patch("power_tracker.api.date") as mock_date:
             mock_date.today.return_value = date(2026, 4, 22)
@@ -89,12 +90,19 @@ def test_get_monthly_wh_current_month(mock_gc, client):
     assert body["wh"] == 2400.0
     assert body["period_start"] == "2026-04-01"
     assert body["period_end"] == "2026-04-22"
+    # delta_days = (2026-04-22 - 2026-04-01).days + 1 = 22 (inclusive)
+    cur = conn.cursor.return_value.__enter__.return_value
+    params = cur.execute.call_args[0][1]
+    assert params[0] == 22               # delta_days
+    assert params[1] == date(2026, 4, 1) # period_start
+    assert params[2] == date(2026, 4, 22) # today
 
 
 @patch("power_tracker.api.get_connection")
 def test_get_monthly_wh_previous_month(mock_gc, client):
     # billing day 25, today is 10th → period starts 25th of previous month
-    mock_gc.return_value = _mock_conn(scalar=1000.0)
+    conn = _mock_conn(scalar=1000.0)
+    mock_gc.return_value = conn
     with patch.dict(os.environ, {"BILLING_DAY": "25"}):
         with patch("power_tracker.api.date") as mock_date:
             mock_date.today.return_value = date(2026, 4, 10)
@@ -103,6 +111,12 @@ def test_get_monthly_wh_previous_month(mock_gc, client):
     assert res.status_code == 200
     body = res.get_json()
     assert body["period_start"] == "2026-03-25"
+    # delta_days = (2026-04-10 - 2026-03-25).days + 1 = 17 (inclusive)
+    cur = conn.cursor.return_value.__enter__.return_value
+    params = cur.execute.call_args[0][1]
+    assert params[0] == 17                # delta_days
+    assert params[1] == date(2026, 3, 25) # period_start
+    assert params[2] == date(2026, 4, 10) # today
 
 
 @patch("power_tracker.api.get_connection")

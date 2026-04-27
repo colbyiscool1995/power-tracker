@@ -196,13 +196,20 @@ def get_monthly_wh():
         first_of_month = today.replace(day=1)
         period_start = (first_of_month - timedelta(days=1)).replace(day=billing_day)
 
+    # get delta in days from period start to today
+    delta_days = (today - period_start).days + 1
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT SUM(avg_watts) * 24.0 AS wh
-                FROM wattage_daily
-                WHERE day >= %s AND day <= %s;
-            """, (period_start, today))
+                SELECT AVG(day_total_watts) * %s * 24.0 AS wh
+                FROM (
+                    SELECT day, SUM(avg_watts) AS day_total_watts
+                    FROM wattage_daily
+                    WHERE day >= %s AND day <= %s
+                    GROUP BY day
+                ) AS daily_totals;
+            """, (delta_days, period_start, today))
             wh = cur.fetchone()[0]
     return jsonify({
         "period_start": period_start.isoformat(),
