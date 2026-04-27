@@ -23,8 +23,9 @@ def _check_env():
 
 def _install_deps():
     print("Installing Python dependencies ...")
+    req = REPO_DIR / "requirements.txt"
     result = subprocess.run(
-        [PYTHON, "-m", "pip", "install", "-e", str(REPO_DIR)],
+        [PYTHON, "-m", "pip", "install", "-r", str(req)],
         check=False,
     )
     if result.returncode != 0:

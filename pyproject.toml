@@ -17,7 +17,7 @@ power-tracker-client = "power_tracker.client:run_client"
 power-tracker-consumer = "power_tracker.consumer:run_consumer"
 
 [project.optional-dependencies]
-dev = ["pytest>=9.0"]
+dev = ["pytest>=9.0", "pip-tools>=7.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
