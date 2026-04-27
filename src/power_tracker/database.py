@@ -84,8 +84,11 @@ def rollup_minute_averages():
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO wattage_averages (source, avg_watts, system_name, local_ip, minute)
-                SELECT source, AVG(watts), system_name, local_ip, date_trunc('minute', NOW())
+                SELECT source, AVG(watts), system_name, local_ip,
+                       date_trunc('minute', NOW()) - INTERVAL '1 minute'
                 FROM wattage_readings
+                WHERE timestamp >= date_trunc('minute', NOW()) - INTERVAL '1 minute'
+                  AND timestamp <  date_trunc('minute', NOW())
                 GROUP BY source, system_name, local_ip;
             """)
             cur.execute("""
