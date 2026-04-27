@@ -1,7 +1,9 @@
 import json
 import os
+import socket
 
 import pika
+from pika.exceptions import AMQPConnectionError
 from dotenv import load_dotenv
 
 from power_tracker.database import init_db, insert_wattage_reading
@@ -10,17 +12,42 @@ load_dotenv()
 
 
 def _build_connection() -> pika.BlockingConnection:
+    host = os.environ.get("RABBITMQ_HOST", "localhost")
+    port = int(os.environ.get("RABBITMQ_PORT", 5672))
+    user = os.environ.get("RABBITMQ_USER", "guest")
+    password = os.environ.get("RABBITMQ_PASSWORD", "guest")
+    vhost = os.environ.get("RABBITMQ_VHOST", "/")
+
+    try:
+        with socket.create_connection((host, port), timeout=3):
+            pass
+    except OSError as exc:
+        raise ConnectionError(
+            f"RabbitMQ host {host}:{port} is not reachable. "
+            "Check host/IP, firewall, and broker listener settings."
+        ) from exc
+
     credentials = pika.PlainCredentials(
-        username=os.environ.get("RABBITMQ_USER", "guest"),
-        password=os.environ.get("RABBITMQ_PASSWORD", "guest"),
+        username=user,
+        password=password,
     )
     params = pika.ConnectionParameters(
-        host=os.environ.get("RABBITMQ_HOST", "localhost"),
-        port=int(os.environ.get("RABBITMQ_PORT", 5672)),
+        host=host,
+        port=port,
         credentials=credentials,
+        virtual_host=vhost,
         heartbeat=60,
+        connection_attempts=3,
+        retry_delay=2,
+        socket_timeout=5,
     )
-    return pika.BlockingConnection(params)
+    try:
+        return pika.BlockingConnection(params)
+    except AMQPConnectionError as exc:
+        raise ConnectionError(
+            f"AMQP connection failed for {user}@{host}:{port} vhost={vhost!r}. "
+            "Verify credentials, vhost permissions, and broker auth settings."
+        ) from exc
 
 
 def _on_message(channel, method, properties, body):
