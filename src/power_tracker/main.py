@@ -1,51 +1,32 @@
-import json
-import subprocess
+import os
 import threading
 import time
 
+from dotenv import load_dotenv
+
 from power_tracker.api import run_api
+from power_tracker.consumer import run_consumer
 from power_tracker.database import init_db, insert_wattage_reading, rollup_minute_averages, rollup_hourly_averages, rollup_daily_averages
+from power_tracker.sensors import get_sensor
+from power_tracker.system_info import get_local_ip, get_system_name
+
+load_dotenv()
 
 
-def get_wattage() -> dict[str, float]:
-    """Returns all wattage readings from lm-sensors.
+def _build_poll_loop():
+    sensor = get_sensor()
+    system_name = get_system_name()
+    local_ip = get_local_ip()
+    print(f"System: {system_name} ({local_ip})")
 
-    Returns dict mapping '{chip}/{label}' -> watts (float).
-    Raises RuntimeError if sensors binary not found or returns error.
-    """
-    result = subprocess.run(
-        ["sensors", "-j"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"sensors failed: {result.stderr.strip()}")
-
-    data = json.loads(result.stdout)
-    readings: dict[str, float] = {}
-
-    for chip, chip_data in data.items():
-        if not isinstance(chip_data, dict):
-            continue
-        for label, sensor_data in chip_data.items():
-            if label == "Adapter" or not isinstance(sensor_data, dict):
-                continue
-            for key, value in sensor_data.items():
-                if key.startswith("power") and (
-                    key.endswith("_input") or key.endswith("_average")
-                ):
-                    readings[f"{chip}/{label}"] = float(value)
-
-    return readings
-
-
-def _poll_loop():
-    while True:
-        wattage = get_wattage()
-        for source, watts in wattage.items():
-            print(f"{source}: {watts:.3f} W")
-            insert_wattage_reading(source, watts)
-        time.sleep(5)
+    def _poll_loop():
+        while True:
+            wattage = sensor.get_wattage()
+            for source, watts in wattage.items():
+                print(f"{source}: {watts:.3f} W")
+                insert_wattage_reading(source, watts, system_name, local_ip)
+            time.sleep(5)
+    return _poll_loop
 
 
 def _minute_checker():
@@ -80,19 +61,28 @@ def _hour_checker():
             time.sleep(0.5)
 
 
-_THREADS = [
-    ("poll",    _poll_loop),
-    ("minute",  _minute_checker),
-    ("hour",    _hour_checker),
-    ("api",     run_api),
+_SHARED_THREADS = [
+    ("minute",   _minute_checker),
+    ("hour",     _hour_checker),
+    ("api",      run_api),
 ]
 
 
 def main():
+    mode = os.environ.get("RUN_MODE", "standalone").lower()
+    print(f"Starting in {mode} mode.")
     init_db()
+
+    if mode == "standalone":
+        ingest = ("poll", _build_poll_loop())
+    elif mode == "server":
+        ingest = ("consumer", run_consumer)
+    else:
+        raise RuntimeError(f"Unknown RUN_MODE '{mode}'. Use 'standalone' or 'server'.")
+
     threads = [
         threading.Thread(name=name, target=fn, daemon=True)
-        for name, fn in _THREADS
+        for name, fn in [ingest, *_SHARED_THREADS]
     ]
     for t in threads:
         t.start()

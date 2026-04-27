@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from power_tracker.main import get_wattage
+from power_tracker.sensors import LinuxLmSensor
 
 
 def _make_result(stdout: str, returncode: int = 0) -> MagicMock:
@@ -27,10 +27,10 @@ SENSOR_JSON = {
 }
 
 
-@patch("power_tracker.main.subprocess.run")
+@patch("power_tracker.sensors.subprocess.run")
 def test_get_wattage_returns_power_readings(mock_run):
     mock_run.return_value = _make_result(json.dumps(SENSOR_JSON))
-    result = get_wattage()
+    result = LinuxLmSensor().get_wattage()
     assert result == {
         "zenpower-pci-00c3/SVI2_P_Core": 40.0,
         "zenpower-pci-00c3/SVI2_P_SoC": 5.0,
@@ -38,7 +38,7 @@ def test_get_wattage_returns_power_readings(mock_run):
     }
 
 
-@patch("power_tracker.main.subprocess.run")
+@patch("power_tracker.sensors.subprocess.run")
 def test_get_wattage_skips_non_power_keys(mock_run):
     data = {
         "chip": {
@@ -49,28 +49,28 @@ def test_get_wattage_skips_non_power_keys(mock_run):
         }
     }
     mock_run.return_value = _make_result(json.dumps(data))
-    result = get_wattage()
+    result = LinuxLmSensor().get_wattage()
     assert list(result.keys()) == ["chip/PPT"]
     assert result["chip/PPT"] == 42.0
 
 
-@patch("power_tracker.main.subprocess.run")
+@patch("power_tracker.sensors.subprocess.run")
 def test_get_wattage_skips_adapter_key(mock_run):
     data = {"chip": {"Adapter": "Virtual device"}}
     mock_run.return_value = _make_result(json.dumps(data))
-    assert get_wattage() == {}
+    assert LinuxLmSensor().get_wattage() == {}
 
 
-@patch("power_tracker.main.subprocess.run")
+@patch("power_tracker.sensors.subprocess.run")
 def test_get_wattage_raises_on_nonzero_exit(mock_run):
     r = _make_result("", returncode=1)
     r.stderr = "sensors: command not found"
     mock_run.return_value = r
     with pytest.raises(RuntimeError, match="sensors failed"):
-        get_wattage()
+        LinuxLmSensor().get_wattage()
 
 
-@patch("power_tracker.main.subprocess.run")
+@patch("power_tracker.sensors.subprocess.run")
 def test_get_wattage_empty_output(mock_run):
     mock_run.return_value = _make_result(json.dumps({}))
-    assert get_wattage() == {}
+    assert LinuxLmSensor().get_wattage() == {}

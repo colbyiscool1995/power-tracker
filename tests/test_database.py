@@ -26,7 +26,7 @@ def test_insert_wattage_reading(mock_get_conn):
     cur.execute.assert_called_once()
     sql, params = cur.execute.call_args.args
     assert "INSERT INTO wattage_readings" in sql
-    assert params == ("chip/PPT", 50.0)
+    assert params == ("chip/PPT", 50.0, "", "")
     conn.commit.assert_called_once()
 
 
