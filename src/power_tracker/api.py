@@ -202,9 +202,13 @@ def get_monthly_wh():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT AVG(avg_watts) * %s AS wh
-                FROM wattage_daily
-                WHERE day >= %s AND day <= %s;
+                SELECT AVG(day_total_watts) * %s * 24.0 AS wh
+                FROM (
+                    SELECT day, SUM(avg_watts) AS day_total_watts
+                    FROM wattage_daily
+                    WHERE day >= %s AND day <= %s
+                    GROUP BY day
+                ) AS daily_totals;
             """, (delta_days, period_start, today))
             wh = cur.fetchone()[0]
     return jsonify({
