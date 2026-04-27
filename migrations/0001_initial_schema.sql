@@ -29,10 +29,12 @@ DELETE FROM wattage_hourly a
 USING wattage_hourly b
 WHERE a.id < b.id
   AND a.source = b.source
+  AND a.system_name = b.system_name
+  AND a.local_ip = b.local_ip
   AND a.hour = b.hour;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wattage_hourly_source_hour
-ON wattage_hourly (source, hour);
+ON wattage_hourly (source, system_name, local_ip, hour);
 
 CREATE TABLE IF NOT EXISTS wattage_daily (
     id SERIAL PRIMARY KEY,
