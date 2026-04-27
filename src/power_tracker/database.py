@@ -1,5 +1,5 @@
+import importlib.resources
 import os
-from pathlib import Path
 
 import psycopg2
 from psycopg2.extensions import connection as Connection
@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "migrations"
+_MIGRATIONS_PACKAGE = "power_tracker.migrations"
 
 
 def get_connection() -> Connection:
@@ -41,22 +41,27 @@ def _run_migrations():
             """)
         conn.commit()
 
-        migration_files = sorted(_MIGRATIONS_DIR.glob("*.sql"))
-        for path in migration_files:
+        migrations_ref = importlib.resources.files(_MIGRATIONS_PACKAGE)
+        migration_files = sorted(
+            (f for f in migrations_ref.iterdir() if f.name.endswith(".sql")),
+            key=lambda f: f.name,
+        )
+        for res in migration_files:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT 1 FROM schema_migrations WHERE filename = %s;",
-                    (path.name,),
+                    (res.name,),
                 )
                 if cur.fetchone():
                     continue
 
-            print(f"Applying migration: {path.name}")
+            print(f"Applying migration: {res.name}")
+            sql = res.read_text(encoding="utf-8")
             with conn.cursor() as cur:
-                cur.execute(path.read_text())
+                cur.execute(sql)
                 cur.execute(
                     "INSERT INTO schema_migrations (filename) VALUES (%s);",
-                    (path.name,),
+                    (res.name,),
                 )
             conn.commit()
 
