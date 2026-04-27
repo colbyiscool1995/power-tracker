@@ -92,8 +92,23 @@ class WattageSensor(ABC):
 
 class WindowsPowerSensor(WattageSensor):
     os = "windows"
-    cpu = "amd"
+    cpu = ""
 
+    def __init__(self) -> None:
+        info = cpuinfo.get_cpu_info()
+        vendor = (
+            info.get("vendor_id_raw")
+            or info.get("vendor_id")
+            or info.get("brand_raw")
+            or ""
+        ).lower()
+
+        if "amd" in vendor or "authenticamd" in vendor:
+            self.cpu = "amd"
+        elif "intel" in vendor or "genuineintel" in vendor:
+            self.cpu = "intel"
+        else:
+            self.cpu = ""
     def get_wattage(self) -> dict[str, float]:
         # Placeholder implementation for Windows power sensor
         return {}
