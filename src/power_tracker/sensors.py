@@ -144,11 +144,13 @@ class MacOsPowerSensor(WattageSensor):
             readings["gpu"] = float(gpu_match.group(1)) / 1000.0
 
         # Fallback for systems reporting watts instead of milliwatts.
-        if not readings:
+        # Parse each component independently so mixed-unit output is handled.
+        if "cpu" not in readings:
             cpu_w_match = re.search(r"CPU Power:\s*([0-9]*\.?[0-9]+)\s*W", output)
-            gpu_w_match = re.search(r"GPU Power:\s*([0-9]*\.?[0-9]+)\s*W", output)
             if cpu_w_match:
                 readings["cpu"] = float(cpu_w_match.group(1))
+        if "gpu" not in readings:
+            gpu_w_match = re.search(r"GPU Power:\s*([0-9]*\.?[0-9]+)\s*W", output)
             if gpu_w_match:
                 readings["gpu"] = float(gpu_w_match.group(1))
 
