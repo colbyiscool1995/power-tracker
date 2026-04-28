@@ -62,8 +62,19 @@ def _fix_selinux_context():
     subprocess.run(["sudo", "restorecon", "-v", str(ENV_FILE)], check=False)
 
 
+def _create_log_file_linux(log_path: str, user: str) -> None:
+    path = Path(log_path)
+    subprocess.run(["sudo", "touch", str(path)], check=True)
+    subprocess.run(["sudo", "chown", f"{user}:{user}", str(path)], check=True)
+    subprocess.run(["sudo", "chmod", "640", str(path)], check=True)
+    print(f"Log file: {path} (owner: {user})")
+
+
 def install_linux():
     _fix_selinux_context()
+    service_user = os.environ.get("USER", "root")
+    log_path = _parse_env().get("LOG_FILE", "/var/log/power_tracker.log")
+    _create_log_file_linux(log_path, service_user)
     service_file = Path(f"/etc/systemd/system/{SERVICE_NAME}.service")
     unit = f"""[Unit]
 Description=Power Tracker Server

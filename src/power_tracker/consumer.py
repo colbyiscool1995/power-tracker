@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import pika
@@ -9,6 +10,8 @@ from power_tracker.rabbitmq import build_connection
 
 load_dotenv()
 
+log = logging.getLogger("power_tracker")
+
 
 def _on_message(channel, method, properties, body):
     try:
@@ -18,14 +21,14 @@ def _on_message(channel, method, properties, body):
         system_name = payload.get("system_name", "")
         local_ip = payload.get("local_ip", "")
         insert_wattage_reading(source, watts, system_name, local_ip)
-        print(f"Inserted: [{system_name}] {source} = {watts:.3f} W")
+        log.info("Inserted: [%s] %s = %.3f W", system_name, source, watts)
         channel.basic_ack(delivery_tag=method.delivery_tag)
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
-        print(f"Failed to process message due to invalid payload: {e} — nacking without requeue")
+        log.warning("Invalid payload, nacking without requeue: %s", e)
         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
     except Exception as e:
-        print(f"Failed to process message due to transient error: {e} — nacking for retry")
-        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        log.error("Failed to process message, nacking without requeue: %s", e)
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
 def run_consumer():
@@ -36,7 +39,7 @@ def run_consumer():
     channel.queue_declare(queue=queue, durable=True)
     channel.basic_qos(prefetch_count=10)
     channel.basic_consume(queue=queue, on_message_callback=_on_message)
-    print(f"Consuming from queue '{queue}'. Ctrl+C to stop.")
+    log.info("Consuming from queue '%s'. Ctrl+C to stop.", queue)
     try:
         channel.start_consuming()
     except KeyboardInterrupt:
