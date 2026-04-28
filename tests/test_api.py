@@ -55,30 +55,34 @@ def test_get_readings_empty(mock_gc, client):
 
 @patch("power_tracker.api.get_connection")
 def test_get_current_total(mock_gc, client):
-    mock_gc.return_value = _mock_conn(scalar=123.5)
+    mock_gc.return_value = _mock_conn(rows=[("desktop", 123.5)])
     res = client.get("/totals/current")
     assert res.status_code == 200
-    assert res.get_json()["total_watts"] == 123.5
+    data = res.get_json()
+    assert data[0]["system_name"] == "desktop"
+    assert data[0]["total_watts"] == 123.5
 
 
 @patch("power_tracker.api.get_connection")
 def test_get_current_total_empty(mock_gc, client):
-    mock_gc.return_value = _mock_conn(scalar=None)
+    mock_gc.return_value = _mock_conn(rows=[])
     res = client.get("/totals/current")
-    assert res.get_json()["total_watts"] == 0.0
+    assert res.get_json() == []
 
 
 @patch("power_tracker.api.get_connection")
 def test_get_lifetime_kwh(mock_gc, client):
-    mock_gc.return_value = _mock_conn(scalar=9.6)
+    mock_gc.return_value = _mock_conn(rows=[("desktop", 9.6)])
     res = client.get("/totals/lifetime_kwh")
     assert res.status_code == 200
-    assert res.get_json()["lifetime_kwh"] == 9.6
+    data = res.get_json()
+    assert data[0]["system_name"] == "desktop"
+    assert data[0]["lifetime_kwh"] == 9.6
 
 
 @patch("power_tracker.api.get_connection")
 def test_get_monthly_wh_current_month(mock_gc, client):
-    conn = _mock_conn(scalar=2400.0)
+    conn = _mock_conn(rows=[("desktop", 2400.0)])
     mock_gc.return_value = conn
     with patch.dict(os.environ, {"BILLING_DAY": "1"}):
         with patch("power_tracker.api.date") as mock_date:
@@ -87,21 +91,20 @@ def test_get_monthly_wh_current_month(mock_gc, client):
             res = client.get("/totals/monthly_wh")
     assert res.status_code == 200
     body = res.get_json()
-    assert body["wh"] == 2400.0
     assert body["period_start"] == "2026-04-01"
     assert body["period_end"] == "2026-04-22"
-    # delta_days = (2026-04-22 - 2026-04-01).days + 1 = 22 (inclusive)
+    assert body["systems"][0]["system_name"] == "desktop"
+    assert body["systems"][0]["wh"] == 2400.0
     cur = conn.cursor.return_value.__enter__.return_value
     params = cur.execute.call_args[0][1]
-    assert params[0] == 22               # delta_days
-    assert params[1] == date(2026, 4, 1) # period_start
-    assert params[2] == date(2026, 4, 22) # today
+    assert params[0] == 22
+    assert params[1] == date(2026, 4, 1)
+    assert params[2] == date(2026, 4, 22)
 
 
 @patch("power_tracker.api.get_connection")
 def test_get_monthly_wh_previous_month(mock_gc, client):
-    # billing day 25, today is 10th → period starts 25th of previous month
-    conn = _mock_conn(scalar=1000.0)
+    conn = _mock_conn(rows=[("desktop", 1000.0)])
     mock_gc.return_value = conn
     with patch.dict(os.environ, {"BILLING_DAY": "25"}):
         with patch("power_tracker.api.date") as mock_date:
@@ -111,35 +114,40 @@ def test_get_monthly_wh_previous_month(mock_gc, client):
     assert res.status_code == 200
     body = res.get_json()
     assert body["period_start"] == "2026-03-25"
-    # delta_days = (2026-04-10 - 2026-03-25).days + 1 = 17 (inclusive)
     cur = conn.cursor.return_value.__enter__.return_value
     params = cur.execute.call_args[0][1]
-    assert params[0] == 17                # delta_days
-    assert params[1] == date(2026, 3, 25) # period_start
-    assert params[2] == date(2026, 4, 10) # today
+    assert params[0] == 17
+    assert params[1] == date(2026, 3, 25)
+    assert params[2] == date(2026, 4, 10)
 
 
 @patch("power_tracker.api.get_connection")
 def test_get_daily_totals(mock_gc, client):
-    mock_gc.return_value = _mock_conn(rows=[(_DATE, 200.0)])
+    mock_gc.return_value = _mock_conn(rows=[("desktop", _DATE, 200.0)])
     res = client.get("/totals/daily")
     assert res.status_code == 200
     data = res.get_json()
+    assert data[0]["system_name"] == "desktop"
     assert data[0]["total_watts"] == 200.0
     assert data[0]["day"] == "2026-04-22"
 
+
 @patch("power_tracker.api.get_connection")
 def test_get_current_watts(mock_gc, client):
-    mock_gc.return_value = _mock_conn(scalar=75.0)
+    mock_gc.return_value = _mock_conn(rows=[("desktop", 75.0)])
     res = client.get("/totals/current_watts")
     assert res.status_code == 200
-    assert res.get_json()["current_watts"] == 75.0
+    data = res.get_json()
+    assert data[0]["system_name"] == "desktop"
+    assert data[0]["current_watts"] == 75.0
+
 
 @patch("power_tracker.api.get_connection")
 def test_get_kwh_per_day(mock_gc, client):
-    mock_gc.return_value = _mock_conn(rows=[(_DATE, 1.5)])
+    mock_gc.return_value = _mock_conn(rows=[("desktop", _DATE, 1.5)])
     res = client.get("/totals/kwh_per_day")
     assert res.status_code == 200
     data = res.get_json()
+    assert data[0]["system_name"] == "desktop"
     assert data[0]["day"] == "2026-04-22"
     assert data[0]["kwh"] == 1.5

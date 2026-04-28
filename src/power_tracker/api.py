@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date, timedelta
 
@@ -80,9 +81,17 @@ def get_daily_averages():
 def get_current_total():
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT SUM(watts) FROM wattage_readings;")
-            total = cur.fetchone()[0]
-    return jsonify({"total_watts": total or 0.0})
+            cur.execute("""
+                SELECT system_name, SUM(watts)
+                FROM wattage_readings
+                GROUP BY system_name
+                ORDER BY system_name;
+            """)
+            rows = cur.fetchall()
+    return jsonify([
+        {"system_name": r[0], "total_watts": r[1]}
+        for r in rows
+    ])
 
 
 @app.route("/totals/minute")
@@ -90,15 +99,15 @@ def get_minute_totals():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT minute, SUM(avg_watts)
+                SELECT system_name, minute, SUM(avg_watts)
                 FROM wattage_averages
-                GROUP BY minute
-                ORDER BY minute DESC
+                GROUP BY system_name, minute
+                ORDER BY system_name, minute DESC
                 LIMIT 100;
             """)
             rows = cur.fetchall()
     return jsonify([
-        {"minute": r[0].isoformat(), "total_watts": r[1]}
+        {"system_name": r[0], "minute": r[1].isoformat(), "total_watts": r[2]}
         for r in rows
     ])
 
@@ -108,15 +117,15 @@ def get_hourly_totals():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT hour, SUM(avg_watts)
+                SELECT system_name, hour, SUM(avg_watts)
                 FROM wattage_hourly
-                GROUP BY hour
-                ORDER BY hour DESC
+                GROUP BY system_name, hour
+                ORDER BY system_name, hour DESC
                 LIMIT 100;
             """)
             rows = cur.fetchall()
     return jsonify([
-        {"hour": r[0].isoformat(), "total_watts": r[1]}
+        {"system_name": r[0], "hour": r[1].isoformat(), "total_watts": r[2]}
         for r in rows
     ])
 
@@ -126,15 +135,15 @@ def get_daily_totals():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT day, SUM(avg_watts)
+                SELECT system_name, day, SUM(avg_watts)
                 FROM wattage_daily
-                GROUP BY day
-                ORDER BY day DESC
+                GROUP BY system_name, day
+                ORDER BY system_name, day DESC
                 LIMIT 100;
             """)
             rows = cur.fetchall()
     return jsonify([
-        {"day": r[0].isoformat(), "total_watts": r[1]}
+        {"system_name": r[0], "day": r[1].isoformat(), "total_watts": r[2]}
         for r in rows
     ])
 
@@ -143,15 +152,20 @@ def get_current_watts():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT SUM(watts)
+                SELECT system_name, SUM(watts)
                 FROM (
-                    SELECT DISTINCT ON (source) watts
+                    SELECT DISTINCT ON (source, system_name) system_name, watts
                     FROM wattage_readings
-                    ORDER BY source, timestamp DESC
-                ) AS latest_readings;
+                    ORDER BY source, system_name, timestamp DESC
+                ) AS latest_readings
+                GROUP BY system_name
+                ORDER BY system_name;
             """)
-            total = cur.fetchone()[0]
-    return jsonify({"current_watts": total or 0.0})
+            rows = cur.fetchall()
+    return jsonify([
+        {"system_name": r[0], "current_watts": r[1]}
+        for r in rows
+    ])
 
 
 @app.route("/totals/kwh_per_day")
@@ -159,28 +173,34 @@ def get_kwh_per_day():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT day, SUM(avg_watts) / 1000.0 * 24.0 AS kwh
+                SELECT system_name, day, SUM(avg_watts) / 1000.0 * 24.0 AS kwh
                 FROM wattage_daily
-                GROUP BY day
-                ORDER BY day DESC
+                GROUP BY system_name, day
+                ORDER BY system_name, day DESC
                 LIMIT 100;
             """)
             rows = cur.fetchall()
     return jsonify([
-        {"day": r[0].isoformat(), "kwh": r[1]}
+        {"system_name": r[0], "day": r[1].isoformat(), "kwh": r[2]}
         for r in rows
     ])
+
 
 @app.route("/totals/lifetime_kwh")
 def get_lifetime_kwh():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT SUM(avg_watts) / 1000.0 * 24.0 AS kwh
-                FROM wattage_daily;
+                SELECT system_name, SUM(avg_watts) / 1000.0 * 24.0 AS kwh
+                FROM wattage_daily
+                GROUP BY system_name
+                ORDER BY system_name;
             """)
-            total_kwh = cur.fetchone()[0]
-    return jsonify({"lifetime_kwh": total_kwh or 0.0})
+            rows = cur.fetchall()
+    return jsonify([
+        {"system_name": r[0], "lifetime_kwh": r[1]}
+        for r in rows
+    ])
 
 @app.route("/totals/monthly_wh")
 def get_monthly_wh():
@@ -202,19 +222,41 @@ def get_monthly_wh():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT AVG(day_total_watts) * %s * 24.0 AS wh
+                SELECT system_name, AVG(day_total_watts) * %s * 24.0 AS wh
                 FROM (
-                    SELECT day, SUM(avg_watts) AS day_total_watts
+                    SELECT system_name, day, SUM(avg_watts) AS day_total_watts
                     FROM wattage_daily
                     WHERE day >= %s AND day <= %s
-                    GROUP BY day
-                ) AS daily_totals;
+                    GROUP BY system_name, day
+                ) AS daily_totals
+                GROUP BY system_name
+                ORDER BY system_name;
             """, (delta_days, period_start, today))
-            wh = cur.fetchone()[0]
+            rows = cur.fetchall()
+            print(jsonify({
+                "period_start": period_start.isoformat(),
+                "period_end": today.isoformat(),
+                "systems": [
+                    {"system_name": r[0], "wh": r[1]}
+                    for r in rows
+                ],
+            }))
+            #print json string with indent for readability
+            print(json.dumps({
+               "period_start": period_start.isoformat(),
+               "period_end": today.isoformat(),
+               "systems": [
+                   {"system_name": r[0], "wh": r[1]}
+                   for r in rows
+               ],
+            }, indent=4))
     return jsonify({
         "period_start": period_start.isoformat(),
         "period_end": today.isoformat(),
-        "wh": wh or 0.0,
+        "systems": [
+            {"system_name": r[0], "wh": r[1]}
+            for r in rows
+        ],
     })
 
 
