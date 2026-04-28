@@ -3,9 +3,6 @@ import socket
 
 import pika
 from pika.exceptions import AMQPConnectionError
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 def build_connection(heartbeat: int | None = None) -> pika.BlockingConnection:
@@ -44,15 +41,15 @@ def build_connection(heartbeat: int | None = None) -> pika.BlockingConnection:
         username=user,
         password=password,
     )
-    params_kwargs: dict = dict(
-        host=host,
-        port=port,
-        credentials=credentials,
-        virtual_host=vhost,
-        connection_attempts=3,
-        retry_delay=2,
-        socket_timeout=5,
-    )
+    params_kwargs: dict = {
+        "host": host,
+        "port": port,
+        "credentials": credentials,
+        "virtual_host": vhost,
+        "connection_attempts": 3,
+        "retry_delay": 2,
+        "socket_timeout": 5,
+    }
     if heartbeat is not None:
         params_kwargs["heartbeat"] = heartbeat
 
