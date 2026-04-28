@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Client",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "power_tracker.client",
+      "cwd": "${workspaceFolder}",
+      "python": "${command:python.interpreterPath}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "python": "${command:python.interpreterPath}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

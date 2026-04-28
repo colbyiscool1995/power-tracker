@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from abc import ABC, abstractmethod
 import platform
@@ -124,21 +125,34 @@ class MacOsPowerSensor(WattageSensor):
 
     def get_wattage(self) -> dict[str, float]:
         result = subprocess.run(
-            ["powermetrics", "--samplers", "smc", "-n1", "-J"],
+            ["powermetrics", "--samplers", "cpu_power,gpu_power", "-n", "1"],
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
             raise RuntimeError(f"powermetrics failed: {result.stderr.strip()}")
-
-        data = json.loads(result.stdout)
         readings: dict[str, float] = {}
 
-        for sample in data.get("samples", []):
-            for key, value in sample.get("smc_readings", {}).items():
-                if key.startswith("P") and key.endswith("_avg"):
-                    chip_label = key[:-4]  # Remove '_avg' suffix
-                    readings[chip_label] = float(value)
+        output = f"{result.stdout}\n{result.stderr}"
+
+        cpu_match = re.search(r"CPU Power:\s*([0-9]*\.?[0-9]+)\s*mW", output)
+        gpu_match = re.search(r"GPU Power:\s*([0-9]*\.?[0-9]+)\s*mW", output)
+
+        if cpu_match:
+            readings["cpu"] = float(cpu_match.group(1)) / 1000.0
+        if gpu_match:
+            readings["gpu"] = float(gpu_match.group(1)) / 1000.0
+
+        # Fallback for systems reporting watts instead of milliwatts.
+        # Parse each component independently so mixed-unit output is handled.
+        if "cpu" not in readings:
+            cpu_w_match = re.search(r"CPU Power:\s*([0-9]*\.?[0-9]+)\s*W", output)
+            if cpu_w_match:
+                readings["cpu"] = float(cpu_w_match.group(1))
+        if "gpu" not in readings:
+            gpu_w_match = re.search(r"GPU Power:\s*([0-9]*\.?[0-9]+)\s*W", output)
+            if gpu_w_match:
+                readings["gpu"] = float(gpu_w_match.group(1))
 
         return readings
 

@@ -5,25 +5,13 @@ import time
 import pika
 from dotenv import load_dotenv
 
+from power_tracker.rabbitmq import build_connection
 from power_tracker.sensors import WattageSensor, get_sensor
 from power_tracker.system_info import get_local_ip, get_system_name
 
 load_dotenv()
 
 _POLL_INTERVAL = int(os.environ.get("CLIENT_POLL_INTERVAL", 5))
-
-
-def _build_connection() -> pika.BlockingConnection:
-    credentials = pika.PlainCredentials(
-        username=os.environ.get("RABBITMQ_USER", "guest"),
-        password=os.environ.get("RABBITMQ_PASSWORD", "guest"),
-    )
-    params = pika.ConnectionParameters(
-        host=os.environ.get("RABBITMQ_HOST", "localhost"),
-        port=int(os.environ.get("RABBITMQ_PORT", 5672)),
-        credentials=credentials,
-    )
-    return pika.BlockingConnection(params)
 
 
 def run_client(sensor: WattageSensor | None = None):
@@ -35,7 +23,7 @@ def run_client(sensor: WattageSensor | None = None):
     print(f"System: {system_name} ({local_ip})")
 
     queue = os.environ.get("RABBITMQ_QUEUE", "wattage_readings")
-    connection = _build_connection()
+    connection = build_connection()
     channel = connection.channel()
     channel.queue_declare(queue=queue, durable=True)
 
