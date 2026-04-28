@@ -5,22 +5,9 @@ import pika
 from dotenv import load_dotenv
 
 from power_tracker.database import init_db, insert_wattage_reading
+from power_tracker.rabbitmq import build_connection
 
 load_dotenv()
-
-
-def _build_connection() -> pika.BlockingConnection:
-    credentials = pika.PlainCredentials(
-        username=os.environ.get("RABBITMQ_USER", "guest"),
-        password=os.environ.get("RABBITMQ_PASSWORD", "guest"),
-    )
-    params = pika.ConnectionParameters(
-        host=os.environ.get("RABBITMQ_HOST", "localhost"),
-        port=int(os.environ.get("RABBITMQ_PORT", 5672)),
-        credentials=credentials,
-        heartbeat=60,
-    )
-    return pika.BlockingConnection(params)
 
 
 def _on_message(channel, method, properties, body):
@@ -44,7 +31,7 @@ def _on_message(channel, method, properties, body):
 def run_consumer():
     init_db()
     queue = os.environ.get("RABBITMQ_QUEUE", "wattage_readings")
-    connection = _build_connection()
+    connection = build_connection(heartbeat=60)
     channel = connection.channel()
     channel.queue_declare(queue=queue, durable=True)
     channel.basic_qos(prefetch_count=10)
